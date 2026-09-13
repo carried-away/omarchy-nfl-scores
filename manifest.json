@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "ray.nflscores",
+  "name": "NFL Live Scores",
+  "version": "1.0.0",
+  "author": "ray",
+  "description": "Live NFL scores in a compact grid",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "NFL Live Scores",
+    "description": "Show every live NFL game in a grid",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}

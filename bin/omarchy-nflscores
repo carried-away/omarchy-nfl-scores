@@ -1,0 +1,93 @@
+#!/bin/bash
+
+set -euo pipefail
+
+API="https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+SUMMARY_API="https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy"
+CACHE_FILE="$CACHE_DIR/nflscores.json"
+CACHE_TTL=30
+
+mkdir -p "$CACHE_DIR"
+
+if [[ -f "$CACHE_FILE" ]]; then
+  age=$(( $(date +%s) - $(stat -c %Y "$CACHE_FILE") ))
+  if (( age < CACHE_TTL )); then
+    cat "$CACHE_FILE"
+    exit 0
+  fi
+fi
+
+if ! payload=$(curl -fsS --max-time 8 "$API"); then
+  if [[ -f "$CACHE_FILE" ]]; then
+    jq -c '.error = "offline"' "$CACHE_FILE"
+  else
+    printf '%s\n' '{"events":[],"error":"offline"}'
+  fi
+  exit 0
+fi
+
+result=$(jq -c '
+  def team($side):
+    (($side.competitors // []) | map(select(.homeAway == "away")) | first // {}) as $away
+    | (($side.competitors // []) | map(select(.homeAway == "home")) | first // {}) as $home
+    | {
+        away: {
+          name: ($away.team.displayName // "Away"),
+          abbrev: ($away.team.abbreviation // "AWAY"),
+          logoUrl: ($away.team.logo // $away.team.logos[0].href // null),
+          score: ($away.score // "0"),
+          possession: ($away.possession // false)
+        },
+        home: {
+          name: ($home.team.displayName // "Home"),
+          abbrev: ($home.team.abbreviation // "HOME"),
+          logoUrl: ($home.team.logo // $home.team.logos[0].href // null),
+          score: ($home.score // "0"),
+          possession: ($home.possession // false)
+        }
+      };
+
+  {
+    events: [
+      (.events // [])[]
+      | select(.competitions[0].status.type.state == "in")
+      | (.competitions[0]) as $competition
+      | (team($competition)) as $teams
+      | {
+          id: .id,
+          detail: ($competition.status.type.shortDetail // "LIVE"),
+          broadcast: (($competition.broadcasts[0].names[0] // "") | tostring),
+          away: $teams.away,
+          home: $teams.home
+        }
+    ],
+    fetchedAt: (now | strftime("%H:%M:%S"))
+  }
+' <<<"$payload")
+
+# The scoreboard endpoint omits live possession. The summary endpoint carries
+# the authoritative possession flag, so enrich each live game independently.
+while IFS= read -r event_id; do
+  [[ -n "$event_id" ]] || continue
+  summary=$(curl -fsS --max-time 8 "$SUMMARY_API?event=$event_id" 2>/dev/null || true)
+  [[ -n "$summary" ]] || continue
+  possession=$(jq -c '
+    [.header.competitions[0].competitors[]?
+      | {abbrev: .team.abbreviation, possession: (.possession // false)}]
+  ' <<<"$summary" 2>/dev/null || true)
+  [[ -n "$possession" ]] || continue
+  result=$(jq -c --arg id "$event_id" --argjson possession "$possession" '
+    ($possession | map({key: .abbrev, value: .possession}) | from_entries) as $poss
+    | .events = [
+        .events[]
+        | if .id != $id then .
+          else .away.possession = ($poss[.away.abbrev] // false)
+          | .home.possession = ($poss[.home.abbrev] // false)
+          end
+      ]
+  ' <<<"$result")
+done < <(jq -r '.events[].id' <<<"$result")
+
+printf '%s\n' "$result" > "$CACHE_FILE"
+printf '%s\n' "$result"

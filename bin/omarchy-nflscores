@@ -7,6 +7,10 @@ SUMMARY_API="https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy"
 CACHE_FILE="$CACHE_DIR/nflscores.json"
 CACHE_TTL=30
+MAX_RESPONSE_BYTES=1048576
+MAX_EVENTS=16
+OPERATION_TIMEOUT=20
+DEADLINE=$((SECONDS + OPERATION_TIMEOUT))
 
 mkdir -p "$CACHE_DIR"
 
@@ -18,7 +22,17 @@ if [[ -f "$CACHE_FILE" ]]; then
   fi
 fi
 
-if ! payload=$(curl -fsS --max-time 8 "$API"); then
+fetch_json() {
+  local url="$1"
+  local remaining=$((DEADLINE - SECONDS))
+  local response
+  (( remaining > 0 )) || return 1
+  response=$(curl -fsS --max-time "$remaining" --max-filesize "$MAX_RESPONSE_BYTES" "$url" | head -c "$((MAX_RESPONSE_BYTES + 1))") || return 1
+  (( ${#response} <= MAX_RESPONSE_BYTES )) || return 1
+  printf '%s' "$response"
+}
+
+if ! payload=$(fetch_json "$API"); then
   if [[ -f "$CACHE_FILE" ]]; then
     jq -c '.error = "offline"' "$CACHE_FILE"
   else
@@ -27,7 +41,7 @@ if ! payload=$(curl -fsS --max-time 8 "$API"); then
   exit 0
 fi
 
-result=$(jq -c '
+result=$(jq -c --argjson maxEvents "$MAX_EVENTS" '
   def team($side):
     (($side.competitors // []) | map(select(.homeAway == "away")) | first // {}) as $away
     | (($side.competitors // []) | map(select(.homeAway == "home")) | first // {}) as $home
@@ -50,8 +64,12 @@ result=$(jq -c '
 
   {
     events: [
-      (.events // [])[]
-      | select(.competitions[0].status.type.state == "in")
+      ((.events // []) | if type == "array" then .[:$maxEvents] else [] end)[]
+      | select(
+          type == "object"
+          and (.id | type == "string" and test("^[0-9]{1,20}$"))
+          and .competitions[0].status.type.state == "in"
+        )
       | (.competitions[0]) as $competition
       | (team($competition)) as $teams
       | {
@@ -64,13 +82,16 @@ result=$(jq -c '
     ],
     fetchedAt: (now | strftime("%H:%M:%S"))
   }
-' <<<"$payload")
+' <<<"$payload") || {
+  printf '%s\n' '{"events":[],"error":"invalid-response"}'
+  exit 0
+}
 
 # The scoreboard endpoint omits live possession. The summary endpoint carries
 # the authoritative possession flag, so enrich each live game independently.
 while IFS= read -r event_id; do
   [[ -n "$event_id" ]] || continue
-  summary=$(curl -fsS --max-time 8 "$SUMMARY_API?event=$event_id" 2>/dev/null || true)
+  summary=$(fetch_json "$SUMMARY_API?event=$event_id" 2>/dev/null || true)
   [[ -n "$summary" ]] || continue
   possession=$(jq -c '
     [.header.competitions[0].competitors[]?

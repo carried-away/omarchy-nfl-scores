@@ -108,6 +108,7 @@ Panel {
       }
 
       Text {
+        textFormat: Text.PlainText
         id: teamName
         text: team ? (team.abbrev || team.name) : ""
         color: team && team.possession ? Color.accent : (root.bar ? root.bar.foreground : Color.foreground)
@@ -132,6 +133,7 @@ Panel {
     Item { width: Math.max(0, parent.width - teamScore.implicitWidth - identity.width - parent.spacing) }
 
     Text {
+      textFormat: Text.PlainText
       id: teamScore
       text: team ? (team.score || "0") : "0"
       color: root.bar ? root.bar.foreground : Color.foreground
@@ -179,6 +181,7 @@ Panel {
           spacing: Style.space(8)
 
           Text {
+            textFormat: Text.PlainText
             text: "NFL LIVE"
             color: root.bar ? root.bar.foreground : Color.foreground
             font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
@@ -188,6 +191,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             text: root.report.fetchedAt ? "Updated " + root.report.fetchedAt : "Refreshing..."
             color: Qt.darker(root.bar ? root.bar.foreground : Color.foreground, 1.4)
             font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
@@ -196,6 +200,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: root.report.error === "offline"
           text: "Unable to reach ESPN — showing the last available scores."
           color: Color.urgent
@@ -240,6 +245,7 @@ Panel {
                   spacing: Style.space(8)
 
                   Text {
+                    textFormat: Text.PlainText
                     text: modelData.detail || "LIVE"
                     color: Color.accent
                     font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
@@ -248,6 +254,7 @@ Panel {
                     font.letterSpacing: 1
                   }
                   Text {
+                    textFormat: Text.PlainText
                     text: modelData.broadcast || ""
                     color: Qt.darker(root.bar ? root.bar.foreground : Color.foreground, 1.4)
                     font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
@@ -265,6 +272,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: root.games.length === 0
           width: parent.width - parent.leftPadding - parent.rightPadding
           text: root.report.error === "offline"

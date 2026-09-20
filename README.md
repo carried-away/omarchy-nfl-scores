@@ -3,6 +3,8 @@
 An Omarchy shell bar widget that shows live NFL scores in a compact,
 two-column grid.
 
+![screenshot](preview.png)
+
 ## Features
 
 - Live game status, quarter/time, broadcast network, and scores.

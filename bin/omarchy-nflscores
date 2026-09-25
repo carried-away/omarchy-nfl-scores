@@ -8,7 +8,7 @@ CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy"
 CACHE_FILE="$CACHE_DIR/nflscores.json"
 CACHE_TTL=30
 MAX_RESPONSE_BYTES=1048576
-MAX_EVENTS=16
+MAX_EVENTS=100
 OPERATION_TIMEOUT=20
 DEADLINE=$((SECONDS + OPERATION_TIMEOUT))
 
@@ -64,22 +64,25 @@ result=$(jq -c --argjson maxEvents "$MAX_EVENTS" '
 
   {
     events: [
-      ((.events // []) | if type == "array" then .[:$maxEvents] else [] end)[]
+      (.events // [] | if type == "array" then .[] else empty end)
       | select(
           type == "object"
           and (.id | type == "string" and test("^[0-9]{1,20}$"))
-          and .competitions[0].status.type.state == "in"
+          and (.competitions[0].status.type.state == "in"
+            or .competitions[0].status.type.state == "pre")
         )
       | (.competitions[0]) as $competition
       | (team($competition)) as $teams
       | {
           id: .id,
+          state: ($competition.status.type.state // "pre"),
+          date: (.date // ""),
           detail: ($competition.status.type.shortDetail // "LIVE"),
           broadcast: (($competition.broadcasts[0].names[0] // "") | tostring),
           away: $teams.away,
           home: $teams.home
         }
-    ],
+    ] | sort_by(.date) | .[:$maxEvents],
     fetchedAt: (now | strftime("%H:%M:%S"))
   }
 ' <<<"$payload") || {
@@ -108,7 +111,7 @@ while IFS= read -r event_id; do
           end
       ]
   ' <<<"$result")
-done < <(jq -r '.events[].id' <<<"$result")
+done < <(jq -r '.events[] | select(.state == "in") | .id' <<<"$result")
 
 printf '%s\n' "$result" > "$CACHE_FILE"
 printf '%s\n' "$result"

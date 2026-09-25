@@ -4,7 +4,7 @@
   "name": "NFL Live Scores",
   "version": "1.0.0",
   "author": "ray",
-  "description": "Live NFL scores in a compact grid",
+  "description": "NFL scores and upcoming matchups with favorites sorted first",
   "kinds": [
     "bar-widget"
   ],
@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "NFL Live Scores",
-    "description": "Show every live NFL game in a grid",
+    "description": "Show live scores and upcoming games with favorites sorted first",
     "category": "Info",
     "allowMultiple": false,
     "defaultSection": "center"

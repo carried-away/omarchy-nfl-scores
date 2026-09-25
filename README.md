@@ -1,17 +1,19 @@
-# Omarchy NFL Live Scores
+# Omarchy NFL Scores
 
-An Omarchy shell bar widget that shows live NFL scores in a compact,
-two-column grid.
+An Omarchy shell bar widget for live NFL scores and the upcoming schedule.
 
 ![screenshot](preview.png)
 
 ## Features
 
-- Live game status, quarter/time, broadcast network, and scores.
-- ESPN team logos.
-- A football icon beside the team with possession.
+- Compact football icon with a theme-colored live indicator when NFL games are
+  in progress.
+- Live game status, quarter/time, broadcast network, scores, and possession.
+- Upcoming matchups with kickoff information when no games are live.
+- Favorite teams sort to the top of the displayed game grid.
+- Collapsible favorite-team manager with a clear-all control.
 - Automatic refresh every 30 seconds.
-- Cached scores when ESPN is temporarily unavailable.
+- Cached scores and schedule when ESPN is temporarily unavailable.
 - Scrollable layout for busy game days.
 
 ## Installation
@@ -21,7 +23,10 @@ omarchy plugin add https://github.com/carried-away/omarchy-nfl-scores.git --enab
 ```
 
 The widget is placed in the center section of the bar by default. Click the
-`NFL` bar button to open the scoreboard. Middle-click refreshes it immediately.
+football icon to open the scoreboard. Middle-click refreshes it immediately.
+Select **Manage favorites** to choose teams; they are saved locally between
+sessions and sorted to the top of the game grid. The live dot appears whenever
+at least one game is in progress.
 
 ## Removal
 
@@ -38,7 +43,8 @@ The plugin uses tools included with a standard Omarchy installation:
 - `jq`
 
 Scores and team logos are provided by ESPN's public API. No account or API key
-is required.
+is required. Favorite-team settings are stored in
+`~/.local/state/omarchy/settings/nflscores.json`.
 
 ## License
 

@@ -4,21 +4,20 @@ set -euo pipefail
 
 API="https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
 SUMMARY_API="https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary"
-CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy"
-CACHE_FILE="$CACHE_DIR/nflscores.json"
-CACHE_TTL=30
+STORAGE_HELPER="$(dirname -- "$0")/omarchy-nflscores-storage"
+MAX_OUTPUT_BYTES=131072
 MAX_RESPONSE_BYTES=1048576
 MAX_EVENTS=100
 OPERATION_TIMEOUT=20
 DEADLINE=$((SECONDS + OPERATION_TIMEOUT))
 
-mkdir -p "$CACHE_DIR"
-
-if [[ -f "$CACHE_FILE" ]]; then
-  age=$(( $(date +%s) - $(stat -c %Y "$CACHE_FILE") ))
-  if (( age < CACHE_TTL )); then
-    cat "$CACHE_FILE"
-    exit 0
+if cached_payload=$("$STORAGE_HELPER" read-cache); then
+  printf '%s\n' "$cached_payload"
+  exit 0
+else
+  cache_status=$?
+  if (( cache_status != 3 )); then
+    printf '%s\n' "omarchy-nflscores: ignoring unsafe cache file" >&2
   fi
 fi
 
@@ -33,9 +32,22 @@ fetch_json() {
 }
 
 if ! payload=$(fetch_json "$API"); then
-  if [[ -f "$CACHE_FILE" ]]; then
-    jq -c '.error = "offline"' "$CACHE_FILE"
+  if cached_payload=$("$STORAGE_HELPER" read-stale-cache); then
+    offline_result=$(jq -c '.error = "offline"' <<<"$cached_payload") || {
+      printf '%s\n' '{"events":[],"error":"offline"}'
+      exit 0
+    }
+    offline_size=$(LC_ALL=C printf '%s' "$offline_result" | wc -c)
+    if (( offline_size <= MAX_OUTPUT_BYTES )); then
+      printf '%s\n' "$offline_result"
+    else
+      printf '%s\n' '{"events":[],"error":"offline-cache-too-large"}'
+    fi
   else
+    cache_status=$?
+    if (( cache_status != 3 )); then
+      printf '%s\n' "omarchy-nflscores: stale cache could not be read safely" >&2
+    fi
     printf '%s\n' '{"events":[],"error":"offline"}'
   fi
   exit 0
@@ -141,5 +153,13 @@ while IFS= read -r event_id; do
   ' <<<"$result")
 done < <(jq -r '.events[] | select(.state == "in") | .id' <<<"$result")
 
-printf '%s\n' "$result" > "$CACHE_FILE"
+result_size=$(LC_ALL=C printf '%s' "$result" | wc -c)
+if (( result_size > MAX_OUTPUT_BYTES )); then
+  printf '%s\n' '{"events":[],"error":"response-too-large"}'
+  exit 0
+fi
+
+if ! printf '%s\n' "$result" | "$STORAGE_HELPER" write-cache; then
+  printf '%s\n' "omarchy-nflscores: unable to safely update score cache" >&2
+fi
 printf '%s\n' "$result"

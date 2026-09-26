@@ -45,10 +45,13 @@ The plugin uses tools included with a standard Omarchy installation:
 - `bash`
 - `curl`
 - `jq`
+- `python3`
 
 Scores and team logos are provided by ESPN's public API. No account or API key
 is required. Favorite-team settings are stored in
 `~/.local/state/omarchy/settings/nflscores.json`.
+Local cache and favorite files are opened as bounded, owner-checked regular
+files without following symlinks; writes use atomic replacement.
 
 ## License
 

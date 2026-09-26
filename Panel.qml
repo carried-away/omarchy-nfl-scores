@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
@@ -79,7 +78,9 @@ Panel {
     return "No upcoming NFL games"
   }
   readonly property string backendScript: decodeURIComponent(String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")) + "bin/omarchy-nflscores"
+  readonly property string storageScript: decodeURIComponent(String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")) + "bin/omarchy-nflscores-storage"
   readonly property var barIdentity: hostWidget || root
+  property bool favoritesSavePending: false
 
   function toggleFavorite(abbrev) {
     var next = favorites.slice()
@@ -114,33 +115,64 @@ Panel {
 
   function saveFavorites() {
     if (!favoritesLoaded) return
-    favoriteFile.setText(JSON.stringify({favorites: favorites}, null, 2) + "\n")
+    favoritesSaveTimer.restart()
   }
 
-  property FileView favoriteFile: FileView {
-    path: Quickshell.env("HOME") + "/.local/state/omarchy/settings/nflscores.json"
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.loadFavorites(text())
-    onLoadFailed: {
-      root.favorites = []
-      root.favoritesLoaded = true
-      root.favoritesExpanded = true
+  function writeFavorites() {
+    if (favoritesWriteProc.running) {
+      favoritesSavePending = true
+      return
     }
-    onFileChanged: reload()
+    favoritesWriteProc.command = [
+      storageScript,
+      "write-favorites",
+      JSON.stringify({favorites: favorites})
+    ]
+    favoritesWriteProc.running = true
   }
 
   Process {
-    id: stateDirProc
-    command: ["mkdir", "-p", Quickshell.env("HOME") + "/.local/state/omarchy/settings"]
+    id: favoritesReadProc
+    command: [root.storageScript, "read-favorites"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.loadFavorites(String(text || ""))
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var message = String(text || "").trim()
+        if (message) console.warn("nflscores:", message)
+      }
+    }
     onExited: function(exitCode) {
-      if (exitCode === 0) root.favoriteFile.reload()
-      else console.warn("nflscores: unable to create favorites settings directory")
+      if (exitCode !== 0) {
+        console.warn("nflscores: unable to securely load favorite teams")
+        if (!root.favoritesLoaded) root.loadFavorites("{}")
+      }
     }
   }
 
-  Component.onCompleted: stateDirProc.running = true
+  Timer {
+    id: favoritesSaveTimer
+    interval: 150
+    repeat: false
+    onTriggered: root.writeFavorites()
+  }
+
+  Process {
+    id: favoritesWriteProc
+    running: false
+    onExited: function(exitCode) {
+      if (exitCode !== 0) console.warn("nflscores: unable to securely save favorite teams")
+      if (root.favoritesSavePending) {
+        root.favoritesSavePending = false
+        Qt.callLater(root.writeFavorites)
+      }
+    }
+  }
+
+  Component.onCompleted: favoritesReadProc.running = true
 
   function open() {
     controller.show()
@@ -187,6 +219,13 @@ Panel {
         } catch (e) {
           // Keep the last successful response visible during a bad response.
         }
+      }
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var message = String(text || "").trim()
+        if (message) console.warn("nflscores:", message)
       }
     }
   }

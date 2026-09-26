@@ -518,7 +518,21 @@ Panel {
                   }
                   Text {
                     textFormat: Text.PlainText
-                    text: modelData.state === "in" ? (modelData.broadcast || "") : ""
+                    text: {
+                      var broadcast = modelData.state === "in" ? (modelData.broadcast || "") : ""
+                      var situation = modelData.situation || {}
+                      var downDistance = situation.shortDownDistanceText || situation.downDistanceText || ""
+                      var fieldPosition = situation.possessionText || ""
+                      var gameSituation = ""
+                      if (modelData.state === "in") {
+                        if (downDistance && fieldPosition)
+                          gameSituation = downDistance.replace(/\s+at\s+.+$/i, "") + " · " + fieldPosition
+                        else
+                          gameSituation = downDistance || fieldPosition
+                      }
+                      if (gameSituation && broadcast) return gameSituation + " · " + broadcast
+                      return gameSituation || broadcast
+                    }
                     color: Qt.darker(root.bar ? root.bar.foreground : Color.foreground, 1.4)
                     font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
                     font.pixelSize: Style.font.caption

@@ -4,11 +4,15 @@ An Omarchy shell bar widget for live NFL scores and the upcoming schedule.
 
 ![screenshot](preview.png)
 
+The preview uses real team logos with illustrative game scores and situations.
+
 ## Features
 
 - Compact football icon with a theme-colored live indicator when NFL games are
   in progress.
 - Live game status, quarter/time, broadcast network, scores, and possession.
+- Current down, distance, and field position for live games when ESPN provides
+  the data, shown in the existing compact game-card header.
 - Upcoming matchups with kickoff information when no games are live.
 - Favorite teams sort to the top of the displayed game grid.
 - Collapsible favorite-team manager with a clear-all control.

@@ -62,6 +62,19 @@ result=$(jq -c --argjson maxEvents "$MAX_EVENTS" '
         }
       };
 
+  def situation($value):
+    if ($value | type) != "object" then null
+    else {
+      downDistanceText: ($value.downDistanceText // ""),
+      shortDownDistanceText: ($value.shortDownDistanceText // ""),
+      possessionText: ($value.possessionText // ""),
+      down: ($value.down // null),
+      distance: ($value.distance // null),
+      yardLine: ($value.yardLine // null),
+      isRedZone: ($value.isRedZone // false),
+      lastPlay: ($value.lastPlay.text // "")
+    } end;
+
   {
     events: [
       (.events // [] | if type == "array" then .[] else empty end)
@@ -79,6 +92,7 @@ result=$(jq -c --argjson maxEvents "$MAX_EVENTS" '
           date: (.date // ""),
           detail: ($competition.status.type.shortDetail // "LIVE"),
           broadcast: (($competition.broadcasts[0].names[0] // "") | tostring),
+          situation: situation($competition.situation),
           away: $teams.away,
           home: $teams.home
         }
@@ -90,8 +104,8 @@ result=$(jq -c --argjson maxEvents "$MAX_EVENTS" '
   exit 0
 }
 
-# The scoreboard endpoint omits live possession. The summary endpoint carries
-# the authoritative possession flag, so enrich each live game independently.
+# The summary endpoint carries authoritative possession and situation data for
+# live games, so enrich each event independently.
 while IFS= read -r event_id; do
   [[ -n "$event_id" ]] || continue
   summary=$(fetch_json "$SUMMARY_API?event=$event_id" 2>/dev/null || true)
@@ -100,14 +114,28 @@ while IFS= read -r event_id; do
     [.header.competitions[0].competitors[]?
       | {abbrev: .team.abbreviation, possession: (.possession // false)}]
   ' <<<"$summary" 2>/dev/null || true)
+  situation=$(jq -c '.header.competitions[0].situation // null' <<<"$summary" 2>/dev/null || printf '%s' null)
   [[ -n "$possession" ]] || continue
-  result=$(jq -c --arg id "$event_id" --argjson possession "$possession" '
+  result=$(jq -c --arg id "$event_id" --argjson possession "$possession" --argjson situation "$situation" '
     ($possession | map({key: .abbrev, value: .possession}) | from_entries) as $poss
     | .events = [
         .events[]
         | if .id != $id then .
           else .away.possession = ($poss[.away.abbrev] // false)
           | .home.possession = ($poss[.home.abbrev] // false)
+          | .situation = (
+              if ($situation | type) != "object" then .situation
+              else {
+                downDistanceText: ($situation.downDistanceText // ""),
+                shortDownDistanceText: ($situation.shortDownDistanceText // ""),
+                possessionText: ($situation.possessionText // ""),
+                down: ($situation.down // null),
+                distance: ($situation.distance // null),
+                yardLine: ($situation.yardLine // null),
+                isRedZone: ($situation.isRedZone // false),
+                lastPlay: ($situation.lastPlay.text // "")
+              } end
+            )
           end
       ]
   ' <<<"$result")
